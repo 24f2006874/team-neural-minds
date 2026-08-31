@@ -1,0 +1,305 @@
+================================================================================
+ DRISHTI - HANDOFF GUIDE FOR SUCHINTIKA (MATLAB + WEBSITE)
+ Smart India Hackathon 2026 | Problem Statement 26038 | MathWorks
+================================================================================
+
+HELLO SUCHINTIKA!
+
+This file explains EVERYTHING you need:
+  PART 1 - What this project is (quick recap)
+  PART 2 - The two engines (MATLAB and Python) and how the website picks one
+  PART 3 - How to install MATLAB (step by step, with your student license)
+  PART 4 - How to connect MATLAB to the website
+  PART 5 - Where every file lives
+  PART 6 - How to run the MATLAB pipeline directly (run_demo.m)
+  PART 7 - (Optional) How to train the MATLAB CNN model
+  PART 8 - The website: what pages exist and how they use the pipeline
+  PART 9 - What to do NEXT (checklist)
+
+================================================================================
+PART 1 - WHAT THIS PROJECT IS (QUICK RECAP)
+================================================================================
+DRISHTI is an Explainable-AI system for Diabetic Retinopathy (DR) screening
+in rural India. India has ~77 million diabetics, only ~1 ophthalmologist per
+100,000 rural people, and manual screening is too slow. DRISHTI screens a
+retina photo automatically, shows the doctor WHY it gave that answer, and
+ROUTES the case: auto-clear / send to doctor / urgent.
+
+The full pipeline has 5 modules, exactly as the problem statement asks:
+
+  Module 1 - Trust Gate      : checks image quality (focus/light/FOV).
+                               ACCEPT / ENHANCE / REJECT (recapture feedback).
+  Module 2 - Evidence Engine : detects vessels, optic disc, fovea, lesions
+                               (microaneurysms, hemorrhages, exudates),
+                               plus the DME risk flag.
+  Module 3 - CNN Grading     : grades DR severity on the ICDR scale 0-4
+                               (No DR to Proliferative DR).
+  Module 4 - Explainability  : Grad-CAM attention map + a CONSISTENCY CHECK +
+                               a TRUST score, so the AI grades ITS OWN confidence.
+  Module 5 - Capacity Model  : Simulink simulation of the clinic workflow
+                               (patient arrivals, cameras, AI, reviewers) to
+                               plan district-scale deployment.
+
+The KEY selling point vs other teams is MODULE 4: it is not a black box.
+It tells you where it looked AND whether you should trust it.
+
+================================================================================
+PART 2 - THE TWO ENGINES (MATLAB and PYTHON)
+================================================================================
+Because this is a MathWorks problem, the pipeline exists in BOTH:
+
+  (A) MATLAB version  - the "official" sponsor story. Real .m code under:
+         DRISHTI_portable/matlab/
+         DRISHTI.m, module1..5, run_demo.m
+
+  (B) Python version  - an exact twin that ALSO runs the real trained CNN.
+         DRISHTI_portable/src/
+         pipeline.py, module1..., module4..., etc.
+
+The WEBSITE decides which one to run automatically:
+
+  * If MATLAB + the matlabengine package are installed  -> runs the MATLAB
+    pipeline ("engine: matlab"). This is what we want for the judges.
+  * If MATLAB is NOT installed -> runs the Python twin ("engine: python").
+    The website ALWAYS works, either way. It just labels which engine ran.
+
+So the website never breaks. When you have MATLAB ready, it silently upgrades
+to the real MATLAB pipeline.
+
+================================================================================
+PART 3 - HOW TO INSTALL MATLAB  (STEP BY STEP)
+================================================================================
+WHAT YOU NEED:
+  - Windows 10/11 (this project machine is Windows 10, 64-bit).
+  - A MathWorks account with a STUDENT / UNIVERSITY license. Students usually
+    get MATLAB + Simulink + Toolboxes FREE. If not, a 30-day free trial works
+    for the demo.
+  - ~25-35 GB free disk space.
+  - Time: 2-4 hours on a typical laptop (install is big).
+
+STEPS:
+  1. Go to https://www.mathworks.com/downloads
+  2. Choose your platform -> Windows, and click Download MATLAB.
+     (Or use your university portal if they provide a MATLAB installer link.)
+  3. Run the downloaded installer. It will ask you to SIGN IN.
+     -> Sign in with your STUDENT/UNIVERSITY MathWorks account.
+  4. Select license -> your student/university license.
+  5. PRODUCT SELECTION - pick ONLY these (keeps install smaller + faster):
+       [x] MATLAB
+       [x] Simulink
+       [x] SimEvents                     (needed for Module 5 capacity model)
+       [x] Image Processing Toolbox
+       [x] Computer Vision Toolbox
+       [x] Deep Learning Toolbox
+       [x] Statistics and Machine Learning Toolbox
+       ( ) Medical Imaging Toolbox     -> optional, ONLY if it appears in
+                                          your release. Not required.
+  6. Choose where to install (leave default). Choose "Sign in -> activate
+     online" for the license.
+  7. Let it download + install. It will "register" products. This is the
+     slow part - let it finish.
+  8. Open MATLAB once to confirm it activates. You should see the MATLAB
+     desktop window.
+
+VERIFY IT WORKS:
+  In the MATLAB command window, type:
+      ver
+  You should see MATLAB + the Toolboxes you chose.
+
+NOTE ON OLD / NO-GPU LAPTOPS:
+  This machine has no GPU and an older CPU. MATLAB will RUN, but the CNN
+  (Module 3/4) is slow on CPU. For the demo that is OK because:
+    - Module 1, 2, 5 (quality, evidence, Simulink) are fast and are the main
+      MATLAB story.
+    - The website already runs the fast Python CNN for live screening; MATLAB
+      is the sponsor/architecture demonstration.
+  If you want a fully working MATLAB CNN too, see PART 7 to train it.
+
+================================================================================
+PART 4 - HOW TO CONNECT MATLAB TO THE WEBSITE
+================================================================================
+AFTER MATLAB is installed, do these 3 things:
+
+  STEP 1 - Install the MATLAB Engine for Python (the bridge).
+           Open a Command Prompt / PowerShell and run:
+               python -m pip install matlabengine
+           (If pip is not on PATH, use:  py -m pip install matlabengine )
+
+  STEP 2 - Run the built-in verifier (I made this for you).
+           From the backend folder:
+               cd DRISHTI_portable/../drishti_webapp/backend   (or just the webapp)
+               python setup_matlab.py
+           It checks: package installed -> engine boots -> DRISHTI.m found ->
+           modules present -> builds the Simulink model.
+           It should print:  "DONE. The web app will now report
+                             'MATLAB Engine active'."
+
+  STEP 3 - Restart the website backend, then refresh the site.
+           Stop the old backend, then from the backend folder:
+               uvicorn main:app --host 127.0.0.1 --port 8000
+
+  HOW TO CONFIRM IT SWITCHED:
+    - Open the website -> "How It Works" page.
+    - The badge should now read:  "MATLAB Engine active"
+      (before it said "Python port active").
+    - Or check the backend in a browser:  http://localhost:8000/api/matlab_status
+      It should return:  "engine":"connected","using":"matlab"
+    - Screening results will now carry "engine":"matlab".
+
+================================================================================
+PART 5 - WHERE EVERY FILE LIVES
+================================================================================
+Everything is under:  C:\Users\DELL\Drishti(sih)\
+
+DRISHTI_portable/                  <- the pipeline (share this with judges)
+  matlab/
+    DRISHTI.m                      <- MAIN MATLAB pipeline (entry point)
+    run_demo.m                     <- ONE-COMMAND demo driver (use this!)
+    module1_quality_gate.m         <- Trust Gate
+    module2_evidence_engine.m      <- Evidence Engine
+    module3_train_resnet.m         <- CNN training
+    module4_explainability.m       <- Grad-CAM + consistency + trust
+    module5_build_simulink.m       <- builds the Simulink capacity model
+  src/
+    pipeline.py                    <- Python twin (orchestration)
+    module1_quality_gate.py        <- Python equivalents
+    module2_evidence_engine.py
+    module4_explainability.py
+    module5_capacity_planner.py
+    train_model.py                 <- trains the Python CNN
+    evaluate_model.py              <- validation on APTOS
+    visualize.py
+  models/
+    drishti_dr_model.pt            <- TRAINED Python CNN (used by python twin)
+    drishti_aptos_resnet50.pt      <- another trained variant
+    test_split.json
+  data/
+    stare_images/                  <- sample fundus scans (im0001.png etc.)
+  results/aptos/                   <- real validation outputs + JSON metrics
+  kaggle/
+    DRISHTI_APTOS_Training.ipynb   <- training notebook
+    notebook_source.txt
+
+drishti_webapp/                    <- the website
+  backend/
+    main.py                        <- FastAPI server
+    matlab_engine.py               <- MATLAB Engine bridge (auto-detect)
+    setup_matlab.py                <- verifier (run after installing MATLAB)
+    requirements.txt
+  src/app/                         <- Next.js pages
+  MATLAB_SETUP.md                  <- detailed MATLAB install runbook (same as this)
+  SUCHINTIKA_MATLAB_GUIDE.txt      <- THIS FILE
+
+================================================================================
+PART 6 - HOW TO RUN THE MATLAB PIPELINE DIRECTLY
+================================================================================
+Quickest way to prove the MATLAB pipeline works (no model needed):
+
+  1. Open MATLAB.
+  2. In the "Current Folder" panel, go to the matlab folder:
+        C:\Users\DELL\Drishti(sih)\DRISHTI_portable\matlab
+  3. In the command window, run:
+        run_demo
+     This runs the pipeline on the sample images (data/../stare_images).
+     It prints a summary table (gate, grade, confidence, trust, DME) and
+     saves one report PNG per image:  <patient>_report.png
+  4. If there is NO drishti_dr_model.mat, it uses evidence-based grading
+     (still a full real pipeline run). To use the CNN, see PART 7.
+
+To run on a single image of your choice:
+        run_demo('C:\path\to\your\image.png')
+
+To run on a folder:
+        run_demo('C:\path\to\folder', 'PHC-01')
+
+You can also call the main pipeline directly:
+        result = DRISHTI('sample_image.png', 'PATIENT-001')
+  Look at `result` to see quality, evidence, explanation, recommendation.
+
+To build the Simulink capacity model (Module 5):
+        module5_build_simulink
+  This creates  DRISHTI_CapacityPlanner.slx  in the matlab folder.
+  Open it, press Run. Change arrival rate / camera count / review time to do
+  the "what if" resource-optimisation story for the judges.
+
+================================================================================
+PART 7 - (OPTIONAL) HOW TO TRAIN THE MATLAB CNN MODEL
+================================================================================
+The MATLAB pipeline auto-uses a CNN when it finds a file called
+drishti_dr_model.mat in the matlab folder. To create it you need training
+data arranged in folders:
+
+    dataFolder/
+       train/  Level0/  Level1/  Level2/  Level3/  Level4/   (images in each)
+       val/    Level0/  ...
+       test/   Level0/  ...
+
+Use APTOS 2019 or IDRiD images (links in the problem statement). Then in MATLAB:
+
+    cd C:\Users\DELL\Drishti(sih)\DRISHTI_portable\matlab
+    module3_train_resnet('C:\path\to\dataFolder', 12)
+
+This fine-tunes ResNet-50 with class-balancing + augmentation and saves
+drishti_dr_model.mat. After that, run_demo uses the real CNN + Grad-CAM.
+
+NOTE: If ResNet-50 is not available you will get a clear message telling you
+to install the "Deep Learning Toolbox Model for ResNet-50 Network" Add-On.
+
+TIP: For the demo you do NOT strictly need to train the MATLAB CNN. The
+website already grades with the trained Python model. Module 4 explainability
+also works; the evidence-based path still uses quality + evidence + a trust
+score. Training gives the full CNN story if you have the time/data/GPU server.
+
+================================================================================
+PART 8 - THE WEBSITE: PAGES AND HOW THEY USE THE PIPELINE
+================================================================================
+Run:
+  Backend:  cd drishti_webapp/backend ;  uvicorn main:app --port 8000
+  Frontend: cd drishti_webapp ;  npm run dev   -> then open http://localhost:3000
+
+Pages (all reachable from the top nav):
+  Home (/)            : overview + the validation numbers.
+                        Validated on 550 held-out APTOS images:
+                        Sensitivity (referable) 91.0%, Specificity 96.0%,
+                        QWK 0.895, AUC 0.975  <-- REAL numbers from our model.
+  Screening           : upload a retina photo -> runs the pipeline live -> shows
+                        the 5-stage stepper, the report, and the Grad-CAM story.
+                        (Uses MATLAB Engine if available, else Python.)
+  How It Works        : explains all 5 modules + the consistency-check story.
+                        Also shows the "Built as a MATLAB pipeline" section and
+                        the live engine badge (Python port active / MATLAB active).
+  Validation          : the full real evaluation - 5x5 confusion matrix, ROC,
+                        per-class recall, referable sensitivity/specificity.
+  Planner             : capacity "what if" (cameras vs reviewers vs arrivals),
+                        backed by the same model as module5 (Simulink).
+  Dashboard           : the clinician view - list of screened patients / trust routes.
+  About               : the team + project info (PS 26038, MathWorks).
+
+The frontend talks to the backend API (http://localhost:8000). Every call
+falls back to local mock data if the backend is off, so the site never breaks
+during a demo.
+
+================================================================================
+PART 9 - WHAT TO DO NEXT (CHECKLIST)
+================================================================================
+[ ] 1. Install MATLAB on the demo machine (PART 3). Use your student license.
+[ ] 2. Check MATLAB opens and `ver` lists the toolboxes.
+[ ] 3. Install the bridge:  python -m pip install matlabengine
+[ ] 4. Run:  python setup_matlab.py  -> should end with "MATLAB Engine active".
+[ ] 5. Restart the backend, refresh the website -> badge says "MATLAB Engine active".
+[ ] 6. In MATLAB: run  run_demo  to show the pipeline + save report PNGs.
+[ ] 7. In MATLAB: run  module5_build_simulink  to build + show the Simulink model.
+[ ] 8. (Optional) Train the MATLAB CNN -> drishti_dr_model.mat (PART 7).
+[ ] 9. Do a full judge run-through:
+        - Screening page: upload a photo, show the report + Grad-CAM.
+        - How It Works: show the MATLAB section + engine badge.
+        - Validation: show real numbers + confusion matrix.
+        - Planner: do a what-if.
+        - MATLAB: show run_demo output + the Simulink model.
+[ ] 10. Keep this file + MATLAB_SETUP.md with the project so any teammate
+         can reproduce the setup.
+
+GOOD LUCK, SUCHINTIKA! The project is complete, tested (Python + website),
+and MATLAB-ready. Once MATLAB is installed, everything switches to the real
+MATLAB pipeline automatically.
+================================================================================

@@ -1,0 +1,210 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================================
+   DRISHTI — Design primitives (hand-built, clinical & calm)
+   A grounded dark UI: deep ink canvas, teal as the medical accent, warm
+   signals for risk. Surfaces are layered and tactile (a soft top highlight,
+   a hairline edge, restrained depth) rather than heavy floating glass.
+   ========================================================================== */
+
+:root {
+  --background: #070c16;      /* near-black, slight blue cast */
+  --background-glow: #0b1526;
+  --foreground: #e6eef7;      /* cool white body text */
+  --muted: #8fa0b3;           /* secondary text */
+  --faint: #5b6b7d;           /* captions / de-emphasised */
+
+  --primary: #34d0e8;         /* teal — "verified by AI" */
+  --primary-strong: #63e0f2;
+  --success: #5bd6a0;         /* emerald — cleared */
+  --warning: #f7b955;         /* amber — review */
+  --danger: #f47c7c;          /* rose — urgent */
+
+  --line: rgba(158, 190, 216, 0.10);      /* hairline borders */
+  --line-strong: rgba(158, 190, 216, 0.18);
+  --panel: rgba(20, 31, 47, 0.55);        /* translucent surface */
+  --panel-solid: #0e1826;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  color: var(--foreground);
+  background:
+    radial-gradient(1100px 520px at 50% -160px, rgba(52, 208, 232, 0.10), transparent 70%),
+    radial-gradient(900px 600px at 88% 12%, rgba(91, 214, 160, 0.05), transparent 60%),
+    linear-gradient(180deg, var(--background-glow), var(--background) 42%);
+  background-attachment: fixed;
+  font-family: var(--font-body), system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4, h5 {
+  font-family: var(--font-heading), sans-serif;
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+  margin: 0;
+}
+
+p { margin: 0; }
+
+::selection {
+  background: rgba(52, 208, 232, 0.28);
+  color: #fff;
+}
+
+/* ---------------------------------------------------------------------------
+   Surfaces — layered, with a soft top light and a crisp hairline
+   --------------------------------------------------------------------------- */
+.glass {
+  position: relative;
+  background: linear-gradient(180deg, rgba(24, 37, 56, 0.62), rgba(13, 22, 34, 0.58));
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 10px 34px -18px rgba(3, 8, 16, 0.9);
+}
+
+.glass-strong {
+  position: relative;
+  background: linear-gradient(180deg, rgba(17, 27, 42, 0.92), rgba(10, 17, 27, 0.9));
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 14px 44px -20px rgba(3, 8, 16, 0.95);
+}
+
+/* Gradient text helper */
+.text-gradient {
+  background: linear-gradient(92deg, #63e0f2 0%, #7ee0b6 55%, #a9d9a0 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* ---------------------------------------------------------------------------
+   Type helpers
+   --------------------------------------------------------------------------- */
+.tabular { font-variant-numeric: tabular-nums; }
+
+/* small kicker above headings */
+.eyebrow {
+  font-family: var(--font-body), sans-serif;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+
+.code-inline {
+  font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
+  font-size: 0.82em;
+  background: rgba(20, 31, 47, 0.9);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.1em 0.4em;
+  color: #a9e6f4;
+}
+
+/* ---------------------------------------------------------------------------
+   Chips + buttons
+   --------------------------------------------------------------------------- */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  border: 1px solid var(--line-strong);
+  background: rgba(20, 31, 47, 0.6);
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: linear-gradient(180deg, #2ac4dc, #1d9fc7);
+  color: #04222b;
+  font-weight: 700;
+  padding: 0.62rem 1.15rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35),
+              0 12px 26px -14px rgba(29, 159, 199, 0.9);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
+  cursor: pointer;
+}
+.btn-primary:hover { filter: brightness(1.06); transform: translateY(-1px); }
+.btn-primary:active { transform: translateY(0); }
+
+/* ---------------------------------------------------------------------------
+   Table styling used across pages
+   --------------------------------------------------------------------------- */
+.plain-table { width: 100%; border-collapse: collapse; }
+.plain-table th {
+  text-align: left;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+}
+.plain-table td {
+  padding: 0.72rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Scrollbar
+   --------------------------------------------------------------------------- */
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-track { background: var(--background); }
+::-webkit-scrollbar-thumb {
+  background: rgba(52, 208, 232, 0.22);
+  border-radius: 999px;
+  border: 3px solid var(--background);
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(52, 208, 232, 0.35); }
+
+/* Focus visible for accessibility */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  html { scroll-behavior: auto; }
+}
+
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+}
