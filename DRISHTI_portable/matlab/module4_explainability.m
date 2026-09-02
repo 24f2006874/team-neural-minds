@@ -1,123 +1,430 @@
 function explanation = module4_explainability(net, img, evidence, qualityScore)
 % =========================================================================
-% DRISHTI - MODULE 4: EXPLAINABILITY + CONSISTENCY CHECK (MATLAB version)
-% =========================================================================
-% THE INNOVATION MODULE:
-%   Step 1: Grad-CAM heatmap from the CNN        (WHERE did the AI look?)
-%   Step 2: lesion evidence from Module 2        (WHAT should it have seen?)
-%   Step 3: consistency metrics between the two  (do they agree?)
-%   Step 4: TRUST score -> auto recommendation or human review
+% DRISHTI - MODULE 4
+% EXPLAINABILITY + CONSISTENCY + TRUST
 %
-% Requires: Deep Learning Toolbox (gradCAM available since R2021a)
 % Inputs:
-%   net           - trained network (from module3_train_resnet)
-%   img           - RGB fundus image (uint8)
-%   evidence      - struct from module2_evidence_engine
-%   qualityScore  - image quality score from Module 1 (0..1)
+%   net          - trained DR network
+%   img          - RGB fundus image
+%   evidence     - Module 2 evidence structure
+%   qualityScore - Module 1 quality score [0,1]
+%
+% Output:
+%   explanation  - prediction, confidence, Grad-CAM,
+%                  consistency and trust information
 % =========================================================================
 
-classes = {'No DR (Level 0)', 'NPDR mild (Level 1)', 'NPDR moderate (Level 2)', ...
-           'NPDR severe (Level 3)', 'PDR (Level 4)'};
+fprintf('\n');
+fprintf('====================================================\n');
+fprintf('        DRISHTI MODULE 4 - EXPLAINABILITY\n');
+fprintf('====================================================\n');
 
-% ---------- Step 1: classify + Grad-CAM ----------
-% NOTE: gradCAM expects an index into the network's OWN class list (which
-% comes sorted from the training folder names Level0..Level4). We take the
-% predicted index from the SCORES vector, NOT by matching label text.
-inputSize = net.Layers(1).InputSize;
-imgResized = imresize(img, [inputSize(1) inputSize(2)]);
-[YPred, scores] = classify(net, imgResized);
-[~, predIdx] = max(scores);              % index into the network's class list
+%% 1. GET ACTUAL CLASS NAMES FROM NETWORK
 
-% Grad-CAM: attention heatmap for the predicted class
 try
-    map = gradCAM(net, imgResized, predIdx);
+    classNames = net.Layers(end).Classes;
 catch
+    error(['Unable to read class names from the trained network. ' ...
+           'Check drishti_dr_model.mat.']);
+end
+
+classNames = cellstr(classNames);
+
+%% 2. PREPARE IMAGE
+
+inputSize = net.Layers(1).InputSize;
+
+imgResized = imresize(img, ...
+    [inputSize(1), inputSize(2)]);
+
+%% 3. CLASSIFICATION
+
+[YPred, scores] = classify(net, imgResized);
+
+[confidence, predIdx] = max(scores);
+
+confidence = double(confidence);
+
+predictedLabel = classNames{predIdx};
+
+fprintf('\n[M4] Prediction\n');
+fprintf('Predicted class : %s\n', predictedLabel);
+fprintf('Confidence      : %.2f%%\n', confidence * 100);
+
+%% 4. REFERABLE DR
+
+% APTOS / DRISHTI screening definition:
+% Level 2, 3 and 4 are treated as referable DR.
+
+if predIdx >= 3
+    referableDR = true;
+else
+    referableDR = false;
+end
+
+if referableDR
+    referableText = 'YES';
+else
+    referableText = 'NO';
+end
+
+fprintf('Referable DR    : %s\n', referableText);
+
+%% 5. GRAD-CAM
+
+fprintf('[M4] Generating Grad-CAM...\n');
+
+try
+
+    % Categorical label is robust for the trained classification network
+    map = gradCAM(net, imgResized, YPred);
+
+catch ME1
+
+    % Fallback: class index
     try
-        map = gradCAM(net, imgResized, double(YPred));  % some releases want the label
-    catch ME
-        error('DRISHTI:gradCAM', ...
-            'gradCAM failed (%s). Requires Deep Learning Toolbox R2021a+.', ME.message);
+        map = gradCAM(net, imgResized, predIdx);
+
+    catch ME2
+
+        error(['Grad-CAM failed.\n' ...
+               'Label attempt: %s\n' ...
+               'Index attempt: %s'], ...
+               ME1.message, ME2.message);
     end
 end
-map = map / (max(map(:)) + eps);
 
-% ---------- Step 2+3: consistency check ----------
-consistency = consistencyCheck(map, evidence, size(img));
+%% 6. NORMALIZE GRAD-CAM
 
-% ---------- Step 4: trust score ----------
-confidence = max(scores);
-trust = 0.35*qualityScore + 0.35*confidence + 0.30*consistency.consistency;
-if trust >= 0.76
-    level = 'HIGH';   route = 'TRUSTED - auto screening recommendation';
-elseif trust >= 0.55
-    level = 'MODERATE'; route = 'REVIEW - queue for ophthalmologist';
-else
-    level = 'LOW';    route = 'HUMAN REVIEW REQUIRED - do not act on AI alone';
+map = double(map);
+
+map(map < 0) = 0;
+
+if max(map(:)) > 0
+    map = map ./ max(map(:));
 end
+
+%% 7. CONSISTENCY CHECK
+
+fprintf('[M4] Comparing AI attention with Module 2 evidence...\n');
+
+consistency = consistencyCheck( ...
+    map, evidence, size(img));
+
+%% 8. TRUST SCORE
+
+trust = ...
+      0.35 * double(qualityScore) ...
+    + 0.35 * confidence ...
+    + 0.30 * consistency.consistency;
+
+trust = max(min(trust,1),0);
+
+if trust >= 0.76
+
+    trustLevel = 'HIGH';
+    route = 'TRUSTED - auto screening recommendation';
+
+elseif trust >= 0.55
+
+    trustLevel = 'MODERATE';
+    route = 'REVIEW - queue for ophthalmologist';
+
+else
+
+    trustLevel = 'LOW';
+    route = 'HUMAN REVIEW REQUIRED - do not act on AI alone';
+
+end
+
+%% 9. SAVE RESULTS
 
 explanation.predicted_class = predIdx;
-explanation.predicted_label = classes{predIdx};
-explanation.confidence = double(confidence);
+explanation.predicted_label = predictedLabel;
+explanation.confidence = confidence;
 explanation.scores = scores;
+
+explanation.referableDR = referableDR;
+explanation.referableText = referableText;
+
 explanation.gradcam = map;
+
 explanation.consistency = consistency;
+
 explanation.trust_score = trust;
-explanation.trust_level = level;
+explanation.trust_level = trustLevel;
 explanation.route = route;
+
+%% 10. DISPLAY RESULTS
+
+fprintf('\n');
+fprintf('---------------- MODULE 4 RESULT ----------------\n');
+
+fprintf('Predicted Grade : %s\n', predictedLabel);
+fprintf('Confidence      : %.2f%%\n', confidence * 100);
+fprintf('Referable DR    : %s\n', referableText);
+
+fprintf('Consistency      : %.3f\n', ...
+    consistency.consistency);
+
+fprintf('Consistency level : %s\n', ...
+    consistency.verdict);
+
+fprintf('Trust Score      : %.3f\n', trust);
+fprintf('Trust Level      : %s\n', trustLevel);
+
+fprintf('Route            : %s\n', route);
+
+fprintf('--------------------------------------------------\n');
+
+%% 11. VISUAL DEMO
+
+figure('Name','DRISHTI Module 4 - Explainability', ...
+       'NumberTitle','off');
+
+% Original
+subplot(1,3,1);
+
+imshow(img);
+
+title('Original Fundus');
+
+% Grad-CAM
+subplot(1,3,2);
+
+imshow(img);
+
+hold on;
+
+imagesc(map, ...
+    'AlphaData',0.50);
+
+axis image off;
+
+colormap(gca,'jet');
+
+title('Grad-CAM');
+
+hold off;
+
+% Combined
+subplot(1,3,3);
+
+imshow(img);
+
+hold on;
+
+imagesc(map, ...
+    'AlphaData',0.45);
+
+axis image off;
+
+colormap(gca,'jet');
+
+title(sprintf('%s | %.1f%%', ...
+    predictedLabel, confidence*100));
+
+hold off;
+
+sgtitle(sprintf( ...
+    'DRISHTI Explainability | Referable DR: %s | Trust: %.2f', ...
+    referableText, trust));
+
 end
+
 
 % =========================================================================
+% CONSISTENCY CHECK
+% =========================================================================
+
 function c = consistencyCheck(map, evidence, imgSize)
-% Compares the Grad-CAM attention (resized to the original image) with the
-% lesion evidence. Same three metrics as the Python prototype:
-%   1. centroid distance - heatmap peak vs nearest lesion (in disc diameters)
-%   2. region overlap    - fraction of heatmap energy on lesion areas
-%   3. evidence agreement- lesion load supports the same story
+
 mapF = imresize(map, imgSize(1:2));
-[h, w] = size(mapF);
+
+% ---------------------------------------------------------
+% OPTIC DISC
+% ---------------------------------------------------------
+
 od = evidence.optic_disc;
-dd = 2*od(3);
 
-lesionCentres = [evidence.ma_centres; evidence.hem_centres; evidence.ex_centres];
-lesionMask = evidence.ma_mask | evidence.hem_mask | evidence.ex_mask;
-lesionZone = imdilate(logical(lesionMask), strel('disk', 12));
+if isempty(od) || numel(od) < 3 || od(3) <= 0
 
-% --- metric 1: centroid distance ---
+    dd = max(imgSize(1:2)) / 8;
+
+else
+
+    dd = 2 * double(od(3));
+
+end
+
+% ---------------------------------------------------------
+% LESION CENTRES
+% ---------------------------------------------------------
+
+lesionCentres = [];
+
+if isfield(evidence,'ma_centres') && ...
+        ~isempty(evidence.ma_centres)
+
+    lesionCentres = [
+        lesionCentres;
+        evidence.ma_centres
+    ];
+
+end
+
+if isfield(evidence,'hem_centres') && ...
+        ~isempty(evidence.hem_centres)
+
+    lesionCentres = [
+        lesionCentres;
+        evidence.hem_centres
+    ];
+
+end
+
+if isfield(evidence,'ex_centres') && ...
+        ~isempty(evidence.ex_centres)
+
+    lesionCentres = [
+        lesionCentres;
+        evidence.ex_centres
+    ];
+
+end
+
+% ---------------------------------------------------------
+% LESION MASK
+% ---------------------------------------------------------
+
+lesionMask = false(imgSize(1),imgSize(2));
+
+if isfield(evidence,'ma_mask')
+    lesionMask = lesionMask | logical(evidence.ma_mask);
+end
+
+if isfield(evidence,'hem_mask')
+    lesionMask = lesionMask | logical(evidence.hem_mask);
+end
+
+if isfield(evidence,'ex_mask')
+    lesionMask = lesionMask | logical(evidence.ex_mask);
+end
+
+lesionZone = imdilate( ...
+    lesionMask, ...
+    strel('disk',12));
+
+% ---------------------------------------------------------
+% METRIC 1: CENTROID DISTANCE
+% ---------------------------------------------------------
+
 if ~isempty(lesionCentres)
-    [~, idx] = max(mapF(:));
-    [py, px] = ind2sub(size(mapF), idx);
-    d = hypot(lesionCentres(:,1)-px, lesionCentres(:,2)-py);
+
+    [~,idx] = max(mapF(:));
+
+    [py,px] = ind2sub(size(mapF),idx);
+
+    d = hypot( ...
+        lesionCentres(:,1)-px, ...
+        lesionCentres(:,2)-py);
+
     centroidDistDD = min(d) / dd;
-    mCentroid = min(max(1 - centroidDistDD/3, 0), 1);
+
+    mCentroid = ...
+        min(max(1 - centroidDistDD/3,0),1);
+
 else
+
     centroidDistDD = NaN;
+
     mCentroid = 0.6;
+
 end
 
-% --- metric 2: region overlap ---
-totE = sum(mapF(:));
-if totE > 0 && any(lesionZone(:))
-    mOverlap = min(sum(mapF(lesionZone))/totE/0.30, 1);
+% ---------------------------------------------------------
+% METRIC 2: REGION OVERLAP
+% ---------------------------------------------------------
+
+totalEnergy = sum(mapF(:));
+
+if totalEnergy > 0 && any(lesionZone(:))
+
+    mOverlap = ...
+        min(sum(mapF(lesionZone)) / ...
+        totalEnergy / 0.30,1);
+
 elseif ~any(lesionZone(:))
+
     mOverlap = 0.6;
+
 else
+
     mOverlap = 0;
+
 end
 
-% --- metric 3: evidence agreement ---
-load = evidence.ma_count*1.0 + evidence.hem_count*2.0 + evidence.ex_count*1.5;
-if load > 0
-    mAgree = 0.5 + 0.5*min(load/80, 1);
+% ---------------------------------------------------------
+% METRIC 3: EVIDENCE AGREEMENT
+% ---------------------------------------------------------
+
+maCount = 0;
+hemCount = 0;
+exCount = 0;
+
+if isfield(evidence,'ma_count')
+    maCount = double(evidence.ma_count);
+end
+
+if isfield(evidence,'hem_count')
+    hemCount = double(evidence.hem_count);
+end
+
+if isfield(evidence,'ex_count')
+    exCount = double(evidence.ex_count);
+end
+
+lesionLoad = ...
+      maCount * 1.0 ...
+    + hemCount * 2.0 ...
+    + exCount * 1.5;
+
+if lesionLoad > 0
+
+    mAgree = ...
+        0.5 + 0.5 * min(lesionLoad/80,1);
+
 else
+
     mAgree = 0.5;
+
 end
 
-c.consistency = 0.4*mCentroid + 0.4*mOverlap + 0.2*mAgree;
-if c.consistency >= 0.55,      c.verdict = 'HIGH';
-elseif c.consistency >= 0.40,  c.verdict = 'MODERATE';
-else,                          c.verdict = 'LOW';
+% ---------------------------------------------------------
+% FINAL CONSISTENCY
+% ---------------------------------------------------------
+
+c.consistency = ...
+      0.4*mCentroid ...
+    + 0.4*mOverlap ...
+    + 0.2*mAgree;
+
+if c.consistency >= 0.55
+
+    c.verdict = 'HIGH';
+
+elseif c.consistency >= 0.40
+
+    c.verdict = 'MODERATE';
+
+else
+
+    c.verdict = 'LOW';
+
 end
+
 c.centroid_distance_dd = centroidDistDD;
 c.region_overlap = mOverlap;
 c.evidence_agreement = mAgree;
+
 end
