@@ -34,3 +34,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local MATLAB trained model - exceeds GitHub 100 MB limit
+/models/drishti_dr_model.mat
+
+# Local APTOS datasets - do not commit
+/APTOS_TEST/
+/APTOS_TRAIN_VAL/   
